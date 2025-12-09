@@ -7,6 +7,15 @@ from selenium.common.exceptions import NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import csv
+import os
+
+
+# Définir le chemin du CSV (seule modification)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
+os.makedirs(RAW_DIR, exist_ok=True)
+CSV_PATH = os.path.join(RAW_DIR, "offres_hellowork.csv")
+
 
 # Initialisation
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
@@ -16,7 +25,7 @@ base_url = "https://www.hellowork.com/fr-fr/emploi/recherche.html?k=&l=&d=all&pa
 
 all_offers = []
 page = 1
-max_pages = 10   # ajuste selon ton besoin
+max_pages = 10  # ajuste selon ton besoin
 
 while page <= max_pages:
     url = base_url + str(page)
@@ -81,11 +90,11 @@ while page <= max_pages:
     page += 1
     time.sleep(2)
 
-# Sauvegarde CSV
-with open("offres_hellowork.csv", "w", newline="", encoding="utf-8") as f:
+# Sauvegarde CSV (même contenu, nouvel emplacement)
+with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
     writer.writerow(["Titre", "Entreprise", "Ville", "Contrat", "Date"])
     writer.writerows(all_offers)
 
-print(f"✅ Scraping terminé : {len(all_offers)} offres enregistrées dans 'offres_hellowork.csv'.")
+print(f"✅ Scraping terminé : {len(all_offers)} offres enregistrées dans '{CSV_PATH}'.")
 driver.quit()
