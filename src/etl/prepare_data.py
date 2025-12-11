@@ -1,97 +1,195 @@
 import os
+import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer  # gardé si tu l'utilises plus tard
 
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
 
-# =========================
-# Paths
-# =========================
+# ========================================
+# CHEMINS
+# ========================================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 RAW_PATH = os.path.join(BASE_DIR, "data", "raw", "offres_hellowork.csv")
 INTERIM_DIR = os.path.join(BASE_DIR, "data", "interim")
 os.makedirs(INTERIM_DIR, exist_ok=True)
 CLEAN_PATH = os.path.join(INTERIM_DIR, "offres_hellowork_clean.csv")
 
-# =========================
-# 1) Load raw data
-# =========================
+
+print("📂 Chargement des données brutes...")
 df = pd.read_csv(RAW_PATH, encoding="utf-8")
+print(f"✅ {len(df)} offres chargées")
 
-# =========================
-# 2) Basic cleaning with pandas
-# =========================
-text_cols = ["Titre", "Entreprise", "Ville", "Contrat", "Date"]
-for col in text_cols:
-    df[col] = (
-        df[col]
-        .astype(str)
-        .str.strip()
-        .str.replace(r"\s+", " ", regex=True)
-        .replace({"": pd.NA})
-    )
 
-# remove rows without title or company
-df = df.dropna(subset=["Titre", "Entreprise"])
+# ========================================
+# NETTOYAGE DE BASE
+# ========================================
+print("\n🧹 Nettoyage des espaces et formatage...")
 
-# split location into city + departement
+# Nettoyer les espaces pour toutes les colonnes texte
+for col in ["Titre", "Entreprise", "Ville", "Contrat", "Date"]:
+    if col in df.columns:
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.strip()
+            .str.replace(r"\s+", " ", regex=True)
+        )
+
+
+# ========================================
+# TRAITEMENT DES DONNÉES MANQUANTES
+# Important: On ne supprime PAS les lignes !
+# ========================================
+print("\n⚠️ Traitement des données manquantes (SANS suppression)...")
+
+# 1) TITRE : Si manquant, mettre "Non spécifié"
+df["Titre"] = (
+    df["Titre"]
+    .fillna("Non spécifié")
+    .replace(["", "nan", "NaN"], "Non spécifié")
+)
+
+# 2) ENTREPRISE : Si manquant, mettre "Entreprise non communiquée"
+df["Entreprise"] = (
+    df["Entreprise"]
+    .fillna("Entreprise non communiquée")
+    .replace(["", "nan", "NaN"], "Entreprise non communiquée")
+)
+
+# 3) VILLE : Extraire ville et département (format: "Ville - 75")
 ville_dep = df["Ville"].str.extract(r"^(?P<ville>.+?)\s*-\s*(?P<departement>\d+)$")
-df["Ville_propre"] = ville_dep["ville"].str.strip()
+df["Ville_propre"] = ville_dep["ville"].fillna(df["Ville"]).fillna("Non spécifié").str.strip()
 df["Departement"] = pd.to_numeric(ville_dep["departement"], errors="coerce")
 
-# normalize contract type
-df["Contrat_propre"] = df["Contrat"].str.upper().str.replace(" ", "")
+# Si département manquant, mettre 0 (code pour "non spécifié")
+df["Departement"] = df["Departement"].fillna(0).astype(int)
 
-# remove literal "nan" titles if any
-df = df[df["Titre"].str.lower() != "nan"]
+# 4) CONTRAT : Normaliser et gérer les manquants
+df["Contrat_propre"] = (
+    df["Contrat"]
+    .fillna("NON_SPECIFIE")
+    .astype(str)
+    .str.upper()
+    .str.replace(" ", "", regex=False)
+    .replace(["", "NAN", "NONE"], "NON_SPECIFIE")
+)
 
-# combined text for ML later
+# 5) DATE : Garder telle quelle (on peut la traiter plus tard si besoin)
+df["Date"] = (
+    df["Date"]
+    .fillna("Date inconnue")
+    .replace(["", "nan", "NaN"], "Date inconnue")
+)
+
+
+# ========================================
+# EXTRACTION DE MOTS-CLÉS DU TITRE
+# Pour faciliter le clustering par domaine
+# ========================================
+print("\n🔍 Extraction des mots-clés métiers...")
+
+
+def extraire_domaine(titre: str) -> str:
+    """
+    Détecte un domaine métier à partir du titre.
+    Règles simples basées sur des mots-clés français.
+    """
+    t = str(titre).lower()
+
+    # Restauration / Hôtellerie
+    if any(m in t for m in ["cuisinier", "serveur", "restauration", "hôtel", "hotel", "chef de rang", "restaurant"]):
+        return "Restauration"
+
+    # Logistique / Transport
+    if any(m in t for m in ["logistique", "chauffeur", "livreur", "transport", "pl de nuit", "magasinier", "cariste"]):
+        return "Logistique"
+
+    # BTP / Construction / Travaux
+    if any(m in t for m in ["conducteur de travaux", "chantier", "géotechnique", "geotechnique", "ingénieur travaux", "travaux publics", "bâtiment", "batiment", "scierie"]):
+        return "BTP"
+
+    # Électricité / Énergie / Technique
+    if any(m in t for m in ["électricien", "electricien", "électricité", "electricite", "électrique", "electric", "énergie", "energie", "technicien", "maintenance"]):
+        return "Énergie / Technique"
+
+    # Qualité / QHSE / Sécurité
+    if any(m in t for m in ["qhse", "qse", "qualité", "qualite", "sécurité", "securite", "hse"]):
+        return "Qualité / QHSE"
+
+    # Finance / Assurance / Actuariat / Comptabilité
+    if any(m in t for m in ["actuaire", "risques", "assurances", "assurance", "comptable", "comptabilité", "audit", "contrôle de gestion", "controle de gestion"]):
+        return "Finance / Assurance"
+
+    # Informatique / SI / Data / Digital
+    if any(m in t for m in [
+        "développeur", "developpeur", "développeuse", "developer",
+        "informatique", "data", "si ", "système d'information", "systèmes d'information",
+        "logiciel", "software", "it", "tech", "numérique", "digital", "progiciel"
+    ]):
+        return "Informatique"
+
+    # Commerce / Vente / Magasin
+    if any(m in t for m in [
+        "commercial", "vente", "vendeur", "magasin", "magasinier",
+        "conseiller de vente", "conseiller client", "relation client",
+        "directeur de magasin", "responsable magasin"
+    ]):
+        return "Commerce"
+
+    # Administration / Assistant / Support
+    if any(m in t for m in [
+        "assistant", "assistante", "administratif", "administrative",
+        "gestionnaire", "secrétaire", "back office"
+    ]):
+        return "Administration"
+
+    # Management / Direction / Chef de projet
+    if any(m in t for m in [
+        "manager", "responsable", "directeur", "directrice",
+        "chef de projet", "chef de département", "chef d'équipe", "chef d equipe",
+        "responsable agence", "responsable des projets"
+    ]):
+        return "Management"
+
+    # Par défaut
+    return "Autre"
+
+
+
+# Appliquer la fonction
+df["Domaine_metier"] = df["Titre"].apply(extraire_domaine)
+
+
+# ========================================
+# CRÉATION DU TEXTE COMPLET POUR ML
+# ========================================
+print("\n📝 Création du texte complet pour analyse ML...")
+
 df["texte_complet"] = (
-    df["Titre"].fillna("") + " "
-    + df["Entreprise"].fillna("") + " "
-    + df["Ville_propre"].fillna("") + " "
-    + df["Contrat_propre"].fillna("")
+    df["Titre"].fillna("") + " " +
+    df["Entreprise"].fillna("") + " " +
+    df["Ville_propre"].fillna("") + " " +
+    df["Contrat_propre"].fillna("") + " " +
+    df["Domaine_metier"].fillna("")
 ).str.strip()
 
-# =========================
-# 3) Preprocessing with scikit-learn
-#    (imputation + encoding)
-# =========================
-cat_features = ["Contrat_propre"]
-num_features = ["Departement"]
 
-numeric_transformer = Pipeline(
-    steps=[
-        ("imputer", SimpleImputer(strategy="median")),
-    ]
-)
+# ========================================
+# CALCUL DE STATISTIQUES
+# ========================================
+print("\n📊 Statistiques des données nettoyées:")
+print(f"  - Total offres: {len(df)}")
+print(f"  - Villes uniques: {df['Ville_propre'].nunique()}")
+print(f"  - Contrats uniques: {df['Contrat_propre'].nunique()}")
+print(f"  - Domaines métiers:")
+for domaine, count in df["Domaine_metier"].value_counts().items():
+    print(f"      {domaine}: {count}")
 
-categorical_transformer = Pipeline(
-    steps=[
-        ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("onehot", OneHotEncoder(handle_unknown="ignore")),
-    ]
-)
 
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("num", numeric_transformer, num_features),
-        ("cat", categorical_transformer, cat_features),
-    ],
-    remainder="drop",
-)
-
-# fit + transform to obtain a numerical feature matrix for later ML
-X_prepared = preprocessor.fit_transform(df)
-
-# (optionally, you could save X_prepared to disk later for models)
-
-# =========================
-# 4) Save cleaned pandas dataset
-# =========================
+# ========================================
+# SAUVEGARDE
+# ========================================
 df.to_csv(CLEAN_PATH, index=False, encoding="utf-8")
-print("✅ Données nettoyées enregistrées dans :", CLEAN_PATH)
-print(df.head())
-print(df.shape)
+print(f"\n✅ Données nettoyées sauvegardées dans: {CLEAN_PATH}")
+print(f"✅ Forme finale: {df.shape}")
+print("\n👀 Aperçu des 20 premières lignes:")
+print(df[["Titre", "Entreprise", "Ville_propre", "Contrat_propre", "Domaine_metier"]].head(20))

@@ -1,0 +1,71 @@
+/* Sidebar plus compacte et effets hover */
+.sidebar {
+    transition: all 0.3s ease;
+    width: 260px !important; /* Force une largeur plus étroite */
+}
+
+.sidebar:hover {
+    box-shadow: 4px 0 16px rgba(0,0,0,0.1);
+}
+
+/* Contrainte forte sur les dropdowns pour éviter tout débordement */
+.dash-dropdown,
+.Select-control,
+.Select-menu-outer,
+.Select-menu,
+.Select-menu-list {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Force le menu déroulant à respecter la largeur de la sidebar */
+.Select-menu-outer {
+    width: 100% !important;
+    max-width: 100% !important;
+    left: 0 !important;
+    right: auto !important;
+}
+
+/* Limite la hauteur du menu et ajoute scroll si trop d'options */
+.Select-menu {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+    z-index: 9999 !important;
+}
+
+/* Améliore l'affichage des tags sélectionnés (chips) pour éviter l'expansion */
+.Select-multi-value-wrapper {
+    display: flex !important;
+    flex-wrap: wrap !important;
+}
+
+.Select-value {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 200px !important;
+}
+
+/* Effets hover sur sections filtres, cartes et bouton */
+.filter-section:hover {
+    transform: translateY(-2px);
+}
+
+.reset-btn:hover {
+    background-color: #e0e7ff !important;
+    transform: scale(1.02);
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.graph-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.header-title:hover {
+    color: #4f46e5;
+}

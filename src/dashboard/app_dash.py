@@ -1,379 +1,560 @@
 import os
 import pandas as pd
-
 from dash import Dash, dcc, html, Input, Output
 import plotly.express as px
+import plotly.graph_objects as go
 
-# ========= chemins & données =========
+# ========================================
+# CHARGEMENT DES DONNÉES
+# ========================================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 ML_PATH = os.path.join(BASE_DIR, "data", "processed", "offres_ml.csv")
 
 df = pd.read_csv(ML_PATH, encoding="utf-8")
 
+# ========================================
+# PRÉPARATION DES OPTIONS DE FILTRES
+# ========================================
 villes_options = [{"label": v, "value": v} for v in sorted(df["Ville_propre"].dropna().unique())]
 contrats_options = [{"label": c, "value": c} for c in sorted(df["Contrat_propre"].dropna().unique())]
-clusters_options = [{"label": str(c), "value": int(c)} for c in sorted(df["cluster_metier"].unique())]
+domaines_options = [{"label": d, "value": d} for d in sorted(df["Domaine_metier"].unique())]
+clusters_options = [{"label": f"Cluster {c}: {n}", "value": int(c)} 
+                   for c, n in df.groupby("cluster_id")["cluster_nom"].first().items()]
+salaire_options = [{"label": s, "value": s} for s in ["Bas", "Moyen", "Bon", "Élevé"]]
 
-# couleurs claires & minimalistes
-BG_COLOR = "#f5f0e8"      # beige très clair
-CARD_COLOR = "#ffffff"    # blanc
-ACCENT = "#2563eb"        # bleu
-ACCENT2 = "#7c3aed"       # violet
-ACCENT3 = "#16a34a"       # vert
-TEXT_COLOR = "#1f2933"
+# ========================================
+# COULEURS ET STYLE
+# ========================================
+BG_COLOR = "#f8fafc"
+SIDEBAR_COLOR = "#ffffff"
+CARD_COLOR = "#ffffff"
+ACCENT = "#3b82f6"
+ACCENT2 = "#8b5cf6"
+ACCENT3 = "#10b981"
+TEXT_COLOR = "#1e293b"
+TEXT_LIGHT = "#64748b"
 
+# ========================================
+# APPLICATION DASH
+# ========================================
 app = Dash(__name__)
 
-# Template HTML custom pour ajouter CSS hover
-app.index_string = """
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>Dashboard Offres Hellowork</title>
-        {%css%}
-        <style>
-            .stat-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 10px rgba(15,23,42,0.18);
-            }
-            .card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 14px rgba(15,23,42,0.18);
-            }
-        </style>
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-"""
-
-# ========= layout =========
 app.layout = html.Div(
     style={
-        "fontFamily": "Segoe UI, Arial, sans-serif",
+        "fontFamily": "'Inter', 'Segoe UI', sans-serif",
         "backgroundColor": BG_COLOR,
-        "color": TEXT_COLOR,
+        "display": "flex",
         "minHeight": "100vh",
-        "padding": "20px",
     },
     children=[
-        # Titre dans un cadre
-        html.Div(
-            style={"display": "flex", "justifyContent": "center", "marginBottom": "18px"},
-            children=[
-                html.Div(
-                    "Dashboard Offres Hellowork",
-                    style={
-                        "padding": "10px 24px",
-                        "borderRadius": "14px",
-                        "backgroundColor": CARD_COLOR,
-                        "boxShadow": "0 2px 6px rgba(15,23,42,0.10)",
-                        "fontSize": "26px",
-                        "fontWeight": "700",
-                        "color": ACCENT,
-                    },
-                )
-            ],
-        ),
-
-        # Cartes de stats (centrées + hover)
+        # ========================================
+        # PANEL GAUCHE (SIDEBAR)
+        # ========================================
         html.Div(
             style={
-                "display": "flex",
-                "gap": "12px",
-                "marginBottom": "12px",
-                "justifyContent": "center",
+                "width": "320px",
+                "backgroundColor": SIDEBAR_COLOR,
+                "padding": "20px",
+                "boxShadow": "2px 0 8px rgba(0,0,0,0.05)",
+                "overflowY": "auto",
+                "position": "fixed",
+                "height": "100vh",
             },
             children=[
-                html.Div(
+                # Titre
+                html.H2(
+                    "🎯 Filtres",
                     style={
-                        "minWidth": "180px",
-                        "maxWidth": "200px",
-                        "backgroundColor": CARD_COLOR,
-                        "padding": "6px 10px",
-                        "borderRadius": "10px",
-                        "boxShadow": "0 1px 4px rgba(15,23,42,0.08)",
-                        "transition": "transform 0.15s ease, box-shadow 0.15s ease",
-                        "cursor": "default",
-                    },
-                    children=[
-                        html.Div("Total offres", style={"fontSize": "11px", "color": "#6b7280"}),
-                        html.Div(
-                            f"{len(df):,}".replace(",", " "),
-                            style={"fontSize": "18px", "fontWeight": "600", "color": ACCENT},
-                        ),
-                    ],
-                    className="stat-card",
+                        "color": ACCENT,
+                        "fontSize": "22px",
+                        "marginBottom": "20px",
+                        "fontWeight": "700",
+                    }
                 ),
+                
+                # Filtre: Ville
                 html.Div(
-                    style={
-                        "minWidth": "180px",
-                        "maxWidth": "200px",
-                        "backgroundColor": CARD_COLOR,
-                        "padding": "6px 10px",
-                        "borderRadius": "10px",
-                        "boxShadow": "0 1px 4px rgba(15,23,42,0.08)",
-                        "transition": "transform 0.15s ease, box-shadow 0.15s ease",
-                        "cursor": "default",
-                    },
+                    style={"marginBottom": "20px"},
                     children=[
-                        html.Div("Villes uniques", style={"fontSize": "11px", "color": "#6b7280"}),
-                        html.Div(
-                            f"{df['Ville_propre'].nunique()}",
-                            style={"fontSize": "18px", "fontWeight": "600", "color": ACCENT2},
+                        html.Label(
+                            "📍 Ville",
+                            style={"fontSize": "13px", "fontWeight": "600", "color": TEXT_COLOR, "marginBottom": "6px", "display": "block"}
                         ),
-                    ],
-                    className="stat-card",
-                ),
-                html.Div(
-                    style={
-                        "minWidth": "210px",
-                        "maxWidth": "230px",
-                        "backgroundColor": CARD_COLOR,
-                        "padding": "6px 10px",
-                        "borderRadius": "10px",
-                        "boxShadow": "0 1px 4px rgba(15,23,42,0.08)",
-                        "transition": "transform 0.15s ease, box-shadow 0.15s ease",
-                        "cursor": "default",
-                    },
-                    children=[
-                        html.Div("% offres high demand", style={"fontSize": "11px", "color": "#6b7280"}),
-                        html.Div(
-                            f"{(df['pred_high_demand']==1).mean()*100:.1f} %",
-                            style={"fontSize": "18px", "fontWeight": "600", "color": ACCENT3},
-                        ),
-                    ],
-                    className="stat-card",
-                ),
-            ],
-        ),
-
-        # Filtres
-        html.Div(
-            style={"display": "flex", "gap": "12px", "marginBottom": "14px"},
-            children=[
-                html.Div(
-                    style={"flex": 1},
-                    children=[
-                        html.Label("Ville", style={"fontSize": "12px", "color": "#4b5563"}),
                         dcc.Dropdown(
-                            options=villes_options,
                             id="filter-ville",
-                            placeholder="Toutes",
+                            options=villes_options,
+                            placeholder="Toutes les villes",
                             multi=True,
+                            style={"fontSize": "13px"}
                         ),
-                    ],
+                    ]
                 ),
+                
+                # Filtre: Contrat
                 html.Div(
-                    style={"flex": 1},
+                    style={"marginBottom": "20px"},
                     children=[
-                        html.Label("Contrat", style={"fontSize": "12px", "color": "#4b5563"}),
+                        html.Label(
+                            "📄 Type de contrat",
+                            style={"fontSize": "13px", "fontWeight": "600", "color": TEXT_COLOR, "marginBottom": "6px", "display": "block"}
+                        ),
                         dcc.Dropdown(
-                            options=contrats_options,
                             id="filter-contrat",
-                            placeholder="Tous",
+                            options=contrats_options,
+                            placeholder="Tous les contrats",
                             multi=True,
+                            style={"fontSize": "13px"}
                         ),
-                    ],
+                    ]
                 ),
+                
+                # Filtre: Domaine métier
                 html.Div(
-                    style={"flex": 0.8},
+                    style={"marginBottom": "20px"},
                     children=[
-                        html.Label("Cluster métier", style={"fontSize": "12px", "color": "#4b5563"}),
+                        html.Label(
+                            "💼 Domaine métier",
+                            style={"fontSize": "13px", "fontWeight": "600", "color": TEXT_COLOR, "marginBottom": "6px", "display": "block"}
+                        ),
                         dcc.Dropdown(
-                            options=clusters_options,
-                            id="filter-cluster",
-                            placeholder="Tous",
+                            id="filter-domaine",
+                            options=domaines_options,
+                            placeholder="Tous les domaines",
                             multi=True,
+                            style={"fontSize": "13px"}
                         ),
-                    ],
+                    ]
                 ),
+                
+                # Filtre: Cluster
                 html.Div(
-                    style={"flex": 0.6},
+                    style={"marginBottom": "20px"},
                     children=[
-                        html.Label("High demand", style={"fontSize": "12px", "color": "#4b5563"}),
+                        html.Label(
+                            "🎨 Cluster métier",
+                            style={"fontSize": "13px", "fontWeight": "600", "color": TEXT_COLOR, "marginBottom": "6px", "display": "block"}
+                        ),
+                        dcc.Dropdown(
+                            id="filter-cluster",
+                            options=clusters_options,
+                            placeholder="Tous les clusters",
+                            multi=True,
+                            style={"fontSize": "13px"}
+                        ),
+                    ]
+                ),
+                
+                # Filtre: Niveau de salaire
+                html.Div(
+                    style={"marginBottom": "20px"},
+                    children=[
+                        html.Label(
+                            "💰 Niveau de salaire",
+                            style={"fontSize": "13px", "fontWeight": "600", "color": TEXT_COLOR, "marginBottom": "6px", "display": "block"}
+                        ),
+                        dcc.Dropdown(
+                            id="filter-salaire",
+                            options=salaire_options,
+                            placeholder="Tous les niveaux",
+                            multi=True,
+                            style={"fontSize": "13px"}
+                        ),
+                    ]
+                ),
+                
+                # Checkbox: Métiers très demandés
+                html.Div(
+                    style={"marginBottom": "20px"},
+                    children=[
+                        html.Label(
+                            "🔥 Options spéciales",
+                            style={"fontSize": "13px", "fontWeight": "600", "color": TEXT_COLOR, "marginBottom": "8px", "display": "block"}
+                        ),
                         dcc.Checklist(
-                            options=[{"label": "Seulement", "value": 1}],
-                            id="filter-high-demand",
+                            id="filter-tres-demande",
+                            options=[
+                                {"label": " Métiers très demandés uniquement", "value": 1}
+                            ],
                             value=[],
-                            style={"fontSize": "12px"},
+                            style={"fontSize": "12px", "color": TEXT_COLOR}
                         ),
-                    ],
+                    ]
                 ),
-            ],
+                
+                # Bouton reset (optionnel)
+                html.Button(
+                    "🔄 Réinitialiser les filtres",
+                    id="btn-reset",
+                    n_clicks=0,
+                    style={
+                        "width": "100%",
+                        "padding": "10px",
+                        "backgroundColor": "#f1f5f9",
+                        "border": "none",
+                        "borderRadius": "8px",
+                        "fontSize": "13px",
+                        "fontWeight": "600",
+                        "color": TEXT_COLOR,
+                        "cursor": "pointer",
+                        "marginTop": "10px",
+                    }
+                ),
+            ]
         ),
-
-        # Graphiques ligne 1
+        
+        # ========================================
+        # CONTENU PRINCIPAL (À DROITE)
+        # ========================================
         html.Div(
-            style={"display": "flex", "gap": "16px", "marginBottom": "14px"},
+            style={
+                "marginLeft": "340px",
+                "padding": "20px",
+                "flex": 1,
+            },
             children=[
+                # Header
                 html.Div(
-                    className="card",
+                    style={"marginBottom": "20px"},
+                    children=[
+                        html.H1(
+                            "📊 Dashboard BI - Offres d'Emploi Hellowork",
+                            style={
+                                "color": ACCENT,
+                                "fontSize": "28px",
+                                "fontWeight": "700",
+                                "marginBottom": "5px",
+                            }
+                        ),
+                        html.P(
+                            "Analyse et visualisation dynamique des offres d'emploi avec Machine Learning",
+                            style={"color": TEXT_LIGHT, "fontSize": "14px"}
+                        ),
+                    ]
+                ),
+                
+                # Cartes statistiques
+                html.Div(
+                    id="stats-cards",
                     style={
-                        "flex": 1,
+                        "display": "grid",
+                        "gridTemplateColumns": "repeat(auto-fit, minmax(200px, 1fr))",
+                        "gap": "15px",
+                        "marginBottom": "20px",
+                    }
+                ),
+                
+                # Graphiques - Ligne 1
+                html.Div(
+                    style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "15px", "marginBottom": "15px"},
+                    children=[
+                        html.Div(
+                            style={
+                                "backgroundColor": CARD_COLOR,
+                                "padding": "15px",
+                                "borderRadius": "12px",
+                                "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+                            },
+                            children=[
+                                html.H3("📈 Offres par domaine métier", style={"fontSize": "16px", "marginBottom": "10px", "color": TEXT_COLOR}),
+                                dcc.Graph(id="graph-domaine", style={"height": "320px"}),
+                            ]
+                        ),
+                        html.Div(
+                            style={
+                                "backgroundColor": CARD_COLOR,
+                                "padding": "15px",
+                                "borderRadius": "12px",
+                                "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+                            },
+                            children=[
+                                html.H3("🎯 Distribution des clusters", style={"fontSize": "16px", "marginBottom": "10px", "color": TEXT_COLOR}),
+                                dcc.Graph(id="graph-cluster-pie", style={"height": "320px"}),
+                            ]
+                        ),
+                    ]
+                ),
+                
+                # Graphiques - Ligne 2
+                html.Div(
+                    style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "15px", "marginBottom": "15px"},
+                    children=[
+                        html.Div(
+                            style={
+                                "backgroundColor": CARD_COLOR,
+                                "padding": "15px",
+                                "borderRadius": "12px",
+                                "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+                            },
+                            children=[
+                                html.H3("💰 Distribution des niveaux de salaire", style={"fontSize": "16px", "marginBottom": "10px", "color": TEXT_COLOR}),
+                                dcc.Graph(id="graph-salaire", style={"height": "320px"}),
+                            ]
+                        ),
+                        html.Div(
+                            style={
+                                "backgroundColor": CARD_COLOR,
+                                "padding": "15px",
+                                "borderRadius": "12px",
+                                "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+                            },
+                            children=[
+                                html.H3("🔥 Métiers très demandés vs autres", style={"fontSize": "16px", "marginBottom": "10px", "color": TEXT_COLOR}),
+                                dcc.Graph(id="graph-demande", style={"height": "320px"}),
+                            ]
+                        ),
+                    ]
+                ),
+                
+                # Graphiques - Ligne 3
+                html.Div(
+                    style={"display": "grid", "gridTemplateColumns": "1.5fr 1fr", "gap": "15px", "marginBottom": "15px"},
+                    children=[
+                        html.Div(
+                            style={
+                                "backgroundColor": CARD_COLOR,
+                                "padding": "15px",
+                                "borderRadius": "12px",
+                                "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+                            },
+                            children=[
+                                html.H3("🏙️ Top 15 villes", style={"fontSize": "16px", "marginBottom": "10px", "color": TEXT_COLOR}),
+                                dcc.Graph(id="graph-villes", style={"height": "380px"}),
+                            ]
+                        ),
+                        html.Div(
+                            style={
+                                "backgroundColor": CARD_COLOR,
+                                "padding": "15px",
+                                "borderRadius": "12px",
+                                "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+                            },
+                            children=[
+                                html.H3("📋 Types de contrat", style={"fontSize": "16px", "marginBottom": "10px", "color": TEXT_COLOR}),
+                                dcc.Graph(id="graph-contrats", style={"height": "380px"}),
+                            ]
+                        ),
+                    ]
+                ),
+                
+                # Graphique - Ligne 4 (Popularité internationale)
+                html.Div(
+                    style={
                         "backgroundColor": CARD_COLOR,
-                        "padding": "10px 12px",
-                        "borderRadius": "10px",
-                        "boxShadow": "0 1px 4px rgba(15,23,42,0.08)",
-                        "transition": "transform 0.15s ease, box-shadow 0.15s ease",
+                        "padding": "15px",
+                        "borderRadius": "12px",
+                        "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+                        "marginBottom": "15px",
                     },
                     children=[
-                        html.H4("Offres par cluster", style={"marginBottom": "4px", "fontSize": "15px"}),
-                        dcc.Graph(id="graph-cluster", style={"height": "300px"}),
-                    ],
+                        html.H3("🌍 Top 20 métiers - Popularité internationale", style={"fontSize": "16px", "marginBottom": "10px", "color": TEXT_COLOR}),
+                        dcc.Graph(id="graph-popularite", style={"height": "400px"}),
+                    ]
                 ),
-                html.Div(
-                    className="card",
-                    style={
-                        "flex": 1,
-                        "backgroundColor": CARD_COLOR,
-                        "padding": "10px 12px",
-                        "borderRadius": "10px",
-                        "boxShadow": "0 1px 4px rgba(15,23,42,0.08)",
-                        "transition": "transform 0.15s ease, box-shadow 0.15s ease",
-                    },
-                    children=[
-                        html.H4("High demand vs autres", style={"marginBottom": "4px", "fontSize": "15px"}),
-                        dcc.Graph(id="graph-high", style={"height": "300px"}),
-                    ],
-                ),
-            ],
+            ]
         ),
-
-        # Graphiques ligne 2 : Top villes + pie clusters
-        html.Div(
-            style={"display": "flex", "gap": "16px"},
-            children=[
-                html.Div(
-                    className="card",
-                    style={
-                        "flex": 1.2,
-                        "backgroundColor": CARD_COLOR,
-                        "padding": "10px 12px",
-                        "borderRadius": "10px",
-                        "boxShadow": "0 1px 4px rgba(15,23,42,0.08)",
-                        "transition": "transform 0.15s ease, box-shadow 0.15s ease",
-                    },
-                    children=[
-                        html.H4("Top 10 villes (nombre d'offres)", style={"marginBottom": "4px", "fontSize": "15px"}),
-                        dcc.Graph(id="graph-ville", style={"height": "300px"}),
-                    ],
-                ),
-                html.Div(
-                    className="card",
-                    style={
-                        "flex": 0.8,
-                        "backgroundColor": CARD_COLOR,
-                        "padding": "10px 12px",
-                        "borderRadius": "10px",
-                        "boxShadow": "0 1px 4px rgba(15,23,42,0.08)",
-                        "transition": "transform 0.15s ease, box-shadow 0.15s ease",
-                    },
-                    children=[
-                        html.H4("Répartition des clusters", style={"marginBottom": "4px", "fontSize": "15px"}),
-                        dcc.Graph(id="graph-pie", style={"height": "300px"}),
-                    ],
-                ),
-            ],
-        ),
-    ],
+    ]
 )
 
-# ========= filtrage =========
-def apply_filters(df_in, villes, contrats, clusters, high_only):
+# ========================================
+# FONCTION DE FILTRAGE
+# ========================================
+def appliquer_filtres(df_in, villes, contrats, domaines, clusters, salaires, tres_demande):
+    """Applique tous les filtres sélectionnés"""
     dff = df_in.copy()
+    
     if villes:
         dff = dff[dff["Ville_propre"].isin(villes)]
     if contrats:
         dff = dff[dff["Contrat_propre"].isin(contrats)]
+    if domaines:
+        dff = dff[dff["Domaine_metier"].isin(domaines)]
     if clusters:
-        dff = dff[dff["cluster_metier"].isin(clusters)]
-    if high_only:
-        dff = dff[dff["pred_high_demand"] == 1]
+        dff = dff[dff["cluster_id"].isin(clusters)]
+    if salaires:
+        dff = dff[dff["niveau_salaire"].isin(salaires)]
+    if tres_demande:
+        dff = dff[dff["pred_tres_demande"] == 1]
+    
     return dff
 
-# ========= callbacks =========
+# ========================================
+# CALLBACKS
+# ========================================
 @app.callback(
-    Output("graph-cluster", "figure"),
-    Output("graph-high", "figure"),
-    Output("graph-ville", "figure"),
-    Output("graph-pie", "figure"),
+    Output("stats-cards", "children"),
+    Output("graph-domaine", "figure"),
+    Output("graph-cluster-pie", "figure"),
+    Output("graph-salaire", "figure"),
+    Output("graph-demande", "figure"),
+    Output("graph-villes", "figure"),
+    Output("graph-contrats", "figure"),
+    Output("graph-popularite", "figure"),
     Input("filter-ville", "value"),
     Input("filter-contrat", "value"),
+    Input("filter-domaine", "value"),
     Input("filter-cluster", "value"),
-    Input("filter-high-demand", "value"),
+    Input("filter-salaire", "value"),
+    Input("filter-tres-demande", "value"),
+    Input("btn-reset", "n_clicks"),
 )
-def update_graphs(villes, contrats, clusters, high_demand_value):
-    high_only = 1 in (high_demand_value or [])
-    dff = apply_filters(df, villes, contrats, clusters, high_only)
-
-    # 1) cluster (bar)
-    fig_cluster = px.histogram(
-        dff,
-        x="cluster_metier",
-        color="cluster_metier",
-        color_discrete_sequence=px.colors.qualitative.Set2,
-        labels={"cluster_metier": "Cluster", "count": "Nombre d'offres"},
+def update_dashboard(villes, contrats, domaines, clusters, salaires, tres_demande, reset_clicks):
+    # Appliquer les filtres
+    tres_demande_bool = 1 in (tres_demande or [])
+    dff = appliquer_filtres(df, villes, contrats, domaines, clusters, salaires, tres_demande_bool)
+    
+    # ========= CARTES STATS =========
+    stats_cards = [
+        html.Div(
+            style={
+                "backgroundColor": CARD_COLOR,
+                "padding": "15px",
+                "borderRadius": "10px",
+                "boxShadow": "0 2px 6px rgba(0,0,0,0.05)",
+            },
+            children=[
+                html.Div("📊 Total offres", style={"fontSize": "12px", "color": TEXT_LIGHT, "marginBottom": "5px"}),
+                html.Div(f"{len(dff):,}".replace(",", " "), style={"fontSize": "24px", "fontWeight": "700", "color": ACCENT}),
+            ]
+        ),
+        html.Div(
+            style={
+                "backgroundColor": CARD_COLOR,
+                "padding": "15px",
+                "borderRadius": "10px",
+                "boxShadow": "0 2px 6px rgba(0,0,0,0.05)",
+            },
+            children=[
+                html.Div("🏙️ Villes", style={"fontSize": "12px", "color": TEXT_LIGHT, "marginBottom": "5px"}),
+                html.Div(f"{dff['Ville_propre'].nunique()}", style={"fontSize": "24px", "fontWeight": "700", "color": ACCENT2}),
+            ]
+        ),
+        html.Div(
+            style={
+                "backgroundColor": CARD_COLOR,
+                "padding": "15px",
+                "borderRadius": "10px",
+                "boxShadow": "0 2px 6px rgba(0,0,0,0.05)",
+            },
+            children=[
+                html.Div("🔥 Très demandés", style={"fontSize": "12px", "color": TEXT_LIGHT, "marginBottom": "5px"}),
+                html.Div(f"{(dff['pred_tres_demande']==1).mean()*100:.1f}%", style={"fontSize": "24px", "fontWeight": "700", "color": ACCENT3}),
+            ]
+        ),
+        html.Div(
+            style={
+                "backgroundColor": CARD_COLOR,
+                "padding": "15px",
+                "borderRadius": "10px",
+                "boxShadow": "0 2px 6px rgba(0,0,0,0.05)",
+            },
+            children=[
+                html.Div("💰 Salaire élevé", style={"fontSize": "12px", "color": TEXT_LIGHT, "marginBottom": "5px"}),
+                html.Div(f"{(dff['niveau_salaire']=='Élevé').mean()*100:.1f}%", style={"fontSize": "24px", "fontWeight": "700", "color": "#f59e0b"}),
+            ]
+        ),
+    ]
+    
+    # ========= GRAPHIQUE 1: Domaines =========
+    fig_domaine = px.bar(
+        dff["Domaine_metier"].value_counts().reset_index(),
+        x="count",
+        y="Domaine_metier",
+        orientation="h",
+        color="count",
+        color_continuous_scale="Blues",
+        labels={"count": "Nombre d'offres", "Domaine_metier": ""},
     )
-
-    # 2) high demand vs autres (bar)
-    counts = dff["pred_high_demand"].value_counts().rename_axis("type").reset_index(name="Nombre")
-    mapping = {0: "Autres", 1: "High demand"}
-    counts["type"] = counts["type"].map(mapping)
-    fig_high = px.bar(
-        counts,
-        x="type",
-        y="Nombre",
-        color="type",
-        color_discrete_map={"High demand": ACCENT3, "Autres": ACCENT},
-        labels={"type": "", "Nombre": "Nombre d'offres"},
+    fig_domaine.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+    
+    # ========= GRAPHIQUE 2: Clusters pie =========
+    cluster_data = dff.groupby("cluster_nom").size().reset_index(name="count")
+    fig_cluster_pie = px.pie(
+        cluster_data,
+        names="cluster_nom",
+        values="count",
+        hole=0.4,
+        color_discrete_sequence=px.colors.qualitative.Set3,
     )
-
-    # 3) top villes (bar horizontal)
-    top_villes = (
-        dff["Ville_propre"]
-        .value_counts()
-        .head(10)
-        .rename_axis("Ville")
-        .reset_index(name="Nombre")
+    fig_cluster_pie.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+    
+    # ========= GRAPHIQUE 3: Salaire =========
+    salaire_order = ["Bas", "Moyen", "Bon", "Élevé"]
+    salaire_counts = dff["niveau_salaire"].value_counts().reindex(salaire_order, fill_value=0).reset_index()
+    salaire_counts.columns = ["Niveau", "count"]
+    fig_salaire = px.bar(
+        salaire_counts,
+        x="Niveau",
+        y="count",
+        color="Niveau",
+        color_discrete_map={"Bas": "#ef4444", "Moyen": "#f97316", "Bon": "#10b981", "Élevé": "#3b82f6"},
+        labels={"count": "Nombre d'offres"},
     )
-    fig_ville = px.bar(
+    fig_salaire.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+    
+    # ========= GRAPHIQUE 4: Demande =========
+    demande_counts = dff["pred_tres_demande"].map({0: "Normal", 1: "Très demandé"}).value_counts().reset_index()
+    demande_counts.columns = ["Type", "count"]
+    fig_demande = px.bar(
+        demande_counts,
+        x="Type",
+        y="count",
+        color="Type",
+        color_discrete_map={"Très demandé": ACCENT3, "Normal": "#94a3b8"},
+        labels={"count": "Nombre d'offres"},
+    )
+    fig_demande.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+    
+    # ========= GRAPHIQUE 5: Top villes =========
+    top_villes = dff["Ville_propre"].value_counts().head(15).reset_index()
+    top_villes.columns = ["Ville", "count"]
+    fig_villes = px.bar(
         top_villes,
-        x="Nombre",
+        x="count",
         y="Ville",
         orientation="h",
-        color="Nombre",
-        color_continuous_scale="Blues",
+        color="count",
+        color_continuous_scale="Viridis",
+        labels={"count": "Nombre d'offres", "Ville": ""},
     )
-
-    # 4) pie clusters
-    pie_data = dff["cluster_metier"].value_counts().rename_axis("Cluster").reset_index(name="Nombre")
-    fig_pie = px.pie(
-        pie_data,
-        names="Cluster",
-        values="Nombre",
-        hole=0.4,
-        color="Cluster",
-        color_discrete_sequence=px.colors.qualitative.Set2,
+    fig_villes.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+    
+    # ========= GRAPHIQUE 6: Contrats =========
+    contrat_data = dff["Contrat_propre"].value_counts().reset_index()
+    contrat_data.columns = ["Contrat", "count"]
+    fig_contrats = px.pie(
+        contrat_data,
+        names="Contrat",
+        values="count",
+        color_discrete_sequence=px.colors.qualitative.Pastel,
     )
-
-    for fig in (fig_cluster, fig_high, fig_ville, fig_pie):
-        fig.update_layout(
-            margin=dict(l=10, r=10, t=10, b=10),
-            paper_bgcolor=CARD_COLOR,
-            plot_bgcolor=CARD_COLOR,
-            font_color=TEXT_COLOR,
-        )
-
-    return fig_cluster, fig_high, fig_ville, fig_pie
+    fig_contrats.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+    
+    # ========= GRAPHIQUE 7: Popularité internationale =========
+    top_popularite = (
+        dff.groupby("Titre")
+        .agg({
+            "score_popularite": "mean",
+            "Titre": "count"
+        })
+        .rename(columns={"Titre": "nb_offres"})
+        .sort_values("score_popularite", ascending=False)
+        .head(20)
+        .reset_index()
+    )
+    fig_popularite = px.bar(
+        top_popularite,
+        x="score_popularite",
+        y="Titre",
+        orientation="h",
+        color="score_popularite",
+        color_continuous_scale="RdYlGn",
+        labels={"score_popularite": "Score de popularité", "Titre": ""},
+        hover_data={"nb_offres": True},
+    )
+    fig_popularite.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+    
+    return stats_cards, fig_domaine, fig_cluster_pie, fig_salaire, fig_demande, fig_villes, fig_contrats, fig_popularite
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=8050)
