@@ -15,7 +15,14 @@ Ce projet analyse automatiquement les offres d'emploi publiées sur Hellowork et
 ## 🗂️ Structure du projet
 Projet_Bi/
 ├── data/ # Données brutes, nettoyées et enrichies
+│ ├── raw/ # Données brutes
+│ ├── interim/ # Données nettoyées
+│ └── processed/ # Données enrichies (clusters + prédictions)
 ├── src/ # Code pour scraping, traitement, ML et dashboard
+│ ├── scraping/
+│ ├── etl/
+│ ├── ml/
+│ └── dashboard/
 └── README.md
 
 
