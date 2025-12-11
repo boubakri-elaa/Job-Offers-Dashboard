@@ -14,25 +14,10 @@ Ce projet analyse automatiquement les offres d'emploi publiées sur Hellowork et
 
 ## 🗂️ Structure du projet
 Projet_Bi/
-├── data/
-│ ├── raw/ # Données brutes du scraping
-│ │ └── offres_hellowork.csv
-│ ├── interim/ # Données nettoyées
-│ │ └── offres_hellowork_clean.csv
-│ └── processed/ # Données enrichies (clusters + ML)
-│ ├── offres_clusters.csv
-│ └── offres_ml.csv
-├── src/
-│ ├── scraping/
-│ │ └── scrape_hellowork.py
-│ ├── etl/
-│ │ └── prepare_data.py
-│ ├── ml/
-│ │ ├── clustering.py
-│ │ └── classification.py
-│ └── dashboard/
-│ └── app_dash.py
+├── data/ # Données brutes, nettoyées et enrichies
+├── src/ # Code pour scraping, traitement, ML et dashboard
 └── README.md
+
 
 ---
 
@@ -46,9 +31,13 @@ Le dashboard sera accessible à l'adresse : [http://127.0.0.1:8050](http://127.0
 
 ---
 
-## 🎨 Dashboard
-- Filtres dynamiques : ville, type de contrat, domaine métier, cluster, niveau de salaire, métiers populaires  
-- Visualisations : graphiques et cartes pour explorer les tendances  
+## 🎨 Dashboard (aperçu)
+
+Voici un exemple de ce que vous verrez dans le dashboard :
+
+![Exemple du Dashboard](./docs/dashboard_screenshot.png)
+
+> 💡 Astuce : vous pouvez remplacer l’image par un GIF animé pour montrer l’interaction avec les filtres.
 
 ---
 
@@ -57,5 +46,3 @@ Projet BI - Analyse des Offres d'Emploi
 Cours de Business Intelligence  
 
 Bon visionnage ! 🚀
-
-
