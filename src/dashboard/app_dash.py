@@ -117,6 +117,7 @@ salaire_options = [{"label": s, "value": s} for s in sorted(df["niveau_salaire"]
 # APP
 # ========================================
 app = Dash(__name__)
+server = app.server   # juste après la création de app
 
 def create_filter_section(title, filter_id, options, placeholder, multi=True):
     return html.Div([
@@ -817,6 +818,7 @@ def update_dashboard(villes, contrats, domaines, pays_or_dummy, salaires, tres_d
         fig_salaire_pays_stacked,
         fig_gauge,
     )
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=8050)
